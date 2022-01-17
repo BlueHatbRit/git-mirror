@@ -1,0 +1,68 @@
+#! /bin/bash
+
+usage() {
+	echo "Usage: $(basename $0) [-p] [-t TOKEN]" 2>&1
+	echo "Generate a list of the users GitHub repositories as a txt file."
+	echo "  -p        Look for private repos only and write to private-repos.txt"
+	echo "  -t TOKEN  Specify the GitHub Personal Access Token to use"
+	echo "  -h        Show this message"
+}
+
+OPT_STRING=":pht:"
+while getopts ${OPT_STRING} ARG; do
+  case ${ARG} in
+    t)
+			TOKEN="${OPTARG}"
+			;;
+		p)
+			PRIVATE_REPOS=true
+			;;
+		h)
+			usage
+			exit 1
+			;;
+		?)
+			echo "Invalid option: -${OPTARG}."
+			echo
+			usage
+			exit 1
+			;;
+  esac
+done
+
+if [ -z "$TOKEN" ]; then
+  echo 'GitHub personal access token must be provided with -t' >&2
+  echo
+  usage
+  exit 1
+fi
+
+build_public_repo_list() {
+	API_RESP=$(curl -H "Accept: application/vnd.github.v3+json" \
+		-H "Authorization: bearer ${TOKEN}" \
+  	"https://api.github.com/user/repos?type=owner" -s)
+
+	echo ${API_RESP} | jq '[.[] | select(.private==false)] | .[].ssh_url' \
+	  | tr -d '"' \
+	  > "repos.txt"
+
+	echo "List written to repos.txt"
+}
+
+build_private_repo_list() {
+	API_RESP=$(curl -H "Accept: application/vnd.github.v3+json" \
+		-H "Authorization: bearer ${TOKEN}" \
+  	"https://api.github.com/user/repos?type=owner" -s)
+
+	echo ${API_RESP} | jq '[.[] | select(.private==true)] | .[].ssh_url' \
+	  | tr -d '"' \
+	  > "private-repos.txt"
+
+	echo "List written to private-repos.txt"
+}
+
+if [ -z "$PRIVATE_REPOS" ]; then
+	build_public_repo_list
+else
+	build_private_repo_list
+fi

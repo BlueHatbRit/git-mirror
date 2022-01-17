@@ -1,0 +1,86 @@
+#! /bin/bash
+
+usage() {
+	echo "Usage: $(basename $0) [-f filename] [-d mirror directory]" 2>&1
+	echo "Mirrors a given list of repos"
+	echo "  -f        A file with a git ssh url per line to mirror"
+	echo "  -d        The parent directory to mirror repos into"
+	echo "  -h        Show this message"
+}
+
+OPT_STRING=":hf:d:"
+while getopts ${OPT_STRING} ARG; do
+  case ${ARG} in
+    f)
+			FILENAME="${OPTARG}"
+			;;
+		d)
+			MIRROR_DIR="${OPTARG}"
+			;;
+		h)
+			usage
+			exit 1
+			;;
+		?)
+			echo "Invalid option: -${OPTARG}."
+			echo
+			usage
+			exit 1
+			;;
+  esac
+done
+
+if [ -z "${FILENAME}" ]; then
+  echo 'File of repos must be provided with -f' >&2
+  echo
+  usage
+  exit 1
+fi
+
+if [ ! -f "${FILENAME}" ]; then
+	echo '${FILENAME} does not exist' >&2
+	echo
+	usage
+	exit 1
+fi
+
+if [ -z "${MIRROR_DIR}" ]; then
+  echo 'A directory must be provided with -d' >&2
+  echo
+  usage
+  exit 1
+fi
+
+mirror_or_update_repo() {
+	REPO=$1
+	REPO_NAME=$(basename ${REPO} .git)
+	DEST_DIR="${MIRROR_DIR}/$(basename ${REPO} .git)"
+
+	if [ ! -d "${MIRROR_DIR}" ]; then
+		echo "Creating mirror directory ${MIRROR_DIR}"
+		mkdir -p ${MIRROR_DIR}
+	fi
+
+	echo "${DEST_DIR}"
+
+	if [ -d "${DEST_DIR}" ]; then
+		echo "Updating existing mirror ${REPO_NAME}"
+		# Update mirror
+		pushd ${DEST_DIR} > /dev/null
+		git fetch --prune
+		popd > /dev/null
+	else
+		# Mirror
+		echo "Cloning new mirror repo ${REPO_NAME}"
+		pushd ${MIRROR_DIR} > /dev/null
+		git clone ${REPO} ${REPO_NAME} --mirror --quiet
+		popd > /dev/null
+	fi
+}
+
+#mirror_or_update_repo "git@github.com:BlueHatbRit/bluehatbrit.git"
+
+while read IN; do
+	#echo ${IN}
+	mirror_or_update_repo ${IN}
+done < ${FILENAME}
